@@ -1,3 +1,4 @@
+from core.utils import today_local
 """
 SchedulingService - Business logic สำหรับการจัดตารางเวลา
 
@@ -381,7 +382,7 @@ class SchedulingService:
             list ของ Task objects ที่สร้างใหม่
         """
         if target_date is None:
-            target_date = timezone.now().date()
+            target_date = today_local()
 
         templates = TaskTemplate.objects.filter(
             is_active=True,
@@ -528,7 +529,7 @@ class SchedulingService:
             dict {date: QuerySet}
         """
         if reference_date is None:
-            reference_date = timezone.now().date()
+            reference_date = today_local()
 
         # หาวันจันทร์ของสัปดาห์นี้
         monday = reference_date - timedelta(days=reference_date.weekday())

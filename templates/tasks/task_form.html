@@ -206,8 +206,15 @@
         }
     }
 
+    function getLocalDateStr(date) {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return y + '-' + m + '-' + d;
+    }
+
     function setToday() {
-        const today = new Date().toISOString().split('T')[0];
+        const today = getLocalDateStr(new Date());
         document.querySelector('input[name="task_date"]').value = today;
         updateScheduleSummary();
     }
@@ -215,7 +222,7 @@
     function setTomorrow() {
         const tomorrow = new Date();
         tomorrow.setDate(tomorrow.getDate() + 1);
-        document.querySelector('input[name="task_date"]').value = tomorrow.toISOString().split('T')[0];
+        document.querySelector('input[name="task_date"]').value = getLocalDateStr(tomorrow);
         updateScheduleSummary();
     }
 

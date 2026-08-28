@@ -1,3 +1,4 @@
+from core.utils import today_local
 """
 Forms สำหรับ tasks app
 """
@@ -29,10 +30,10 @@ class TaskCreateForm(forms.ModelForm):
         ).select_related("user", "team")
         # ตั้งค่า default task_date เป็นวันนี้
         if not self.initial.get("task_date"):
-            self.initial["task_date"] = timezone.now().date()
+            self.initial["task_date"] = today_local()
         # ตั้งค่า default deadline เป็นวันนี้ 23:59
         if not self.initial.get("deadline"):
-            today = timezone.now().date()
+            today = today_local()
             default_deadline = timezone.make_aware(
                 timezone.datetime.combine(today, timezone.datetime.max.time()).replace(second=0)
             )

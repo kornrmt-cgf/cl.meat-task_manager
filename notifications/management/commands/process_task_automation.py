@@ -1,3 +1,4 @@
+from core.utils import today_local
 """
 Management command สำหรับ Task Automation
 
@@ -89,7 +90,7 @@ class Command(BaseCommand):
         """สร้าง recurring tasks"""
         from scheduling.services import SchedulingService
 
-        today = timezone.now().date()
+        today = today_local()
 
         if dry_run:
             # นับจำนวน templates ที่จะสร้าง

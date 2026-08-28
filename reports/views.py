@@ -1,3 +1,4 @@
+from core.utils import today_local
 """
 Views สำหรับ reports app
 
@@ -38,16 +39,16 @@ class DailyReportView(LoginRequiredMixin, ManagerRequiredMixin, TemplateView):
             try:
                 target_date = timezone.datetime.strptime(date_str, "%Y-%m-%d").date()
             except ValueError:
-                target_date = timezone.now().date()
+                target_date = today_local()
         else:
-            target_date = timezone.now().date()
+            target_date = today_local()
 
         report = ReportingService.get_daily_report(target_date)
         context.update(report)
 
         context["prev_date"] = target_date - timedelta(days=1)
         context["next_date"] = target_date + timedelta(days=1)
-        context["today"] = timezone.now().date()
+        context["today"] = today_local()
 
         return context
 
@@ -64,7 +65,7 @@ class EmployeeReportView(LoginRequiredMixin, ManagerRequiredMixin, TemplateView)
         date_from_str = self.request.GET.get("date_from")
         date_to_str = self.request.GET.get("date_to")
 
-        today = timezone.now().date()
+        today = today_local()
 
         if date_from_str:
             try:
@@ -116,7 +117,7 @@ class StatusReportView(LoginRequiredMixin, ManagerRequiredMixin, TemplateView):
         date_from_str = self.request.GET.get("date_from")
         date_to_str = self.request.GET.get("date_to")
 
-        today = timezone.now().date()
+        today = today_local()
 
         date_from = None
         date_to = None
@@ -154,7 +155,7 @@ class PerformanceMetricsView(LoginRequiredMixin, ManagerRequiredMixin, TemplateV
         date_from_str = self.request.GET.get("date_from")
         date_to_str = self.request.GET.get("date_to")
 
-        today = timezone.now().date()
+        today = today_local()
 
         date_from = None
         date_to = None
@@ -191,7 +192,7 @@ class CSVExportView(LoginRequiredMixin, ManagerRequiredMixin, View):
         team_id = request.GET.get("team")
         status = request.GET.get("status")
 
-        today = timezone.now().date()
+        today = today_local()
 
         date_from = None
         date_to = None

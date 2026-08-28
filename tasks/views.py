@@ -1,3 +1,4 @@
+from core.utils import today_local
 """
 Views สำหรับ tasks app
 
@@ -62,7 +63,7 @@ class TodayView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        today = timezone.now().date()
+        today = today_local()
 
         context["today"] = today
         tasks = TaskService.get_user_tasks_today(self.request.user)
@@ -93,7 +94,7 @@ class TomorrowView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        tomorrow = timezone.now().date() + timezone.timedelta(days=1)
+        tomorrow = today_local() + timezone.timedelta(days=1)
 
         context["tomorrow"] = tomorrow
         context["tasks"] = TaskService.get_user_tasks_tomorrow(self.request.user)

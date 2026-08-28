@@ -1,3 +1,4 @@
+from core.utils import today_local
 """
 TaskService - Business logic สำหรับการจัดการงาน
 
@@ -564,7 +565,7 @@ class TaskService:
         Returns:
             QuerySet ของ Task ที่ assign ให้ user และ task_date เป็นวันนี้
         """
-        today = timezone.now().date()
+        today = today_local()
 
         from django.db.models import Q
 
@@ -595,7 +596,7 @@ class TaskService:
         Returns:
             QuerySet ของ Task ที่ assign ให้ user และ task_date เป็นวันพรุ่งนี้
         """
-        tomorrow = timezone.now().date() + timezone.timedelta(days=1)
+        tomorrow = today_local() + timezone.timedelta(days=1)
 
         from django.db.models import Q
 

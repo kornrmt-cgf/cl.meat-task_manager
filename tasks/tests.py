@@ -1042,3 +1042,98 @@ class SecurityTest(TestCase):
         self.client.login(userid="user", password="userpass123")
         response = self.client.get(reverse("tasks:edit", args=[task.pk]))
         self.assertIn(response.status_code, [302, 403])
+
+
+# === Open Task Concurrency Tests ===
+
+
+class OpenTaskClaimConcurrencyTest(TestCase):
+    """
+    ทดสอบว่ามีเพียงคนเดียวเท่านั้นที่ claim open task ได้
+    
+    Business Rule:
+    - Employee A claim → SUCCESS
+    - Employee B claim → FAILURE
+    - ต้องมี owner เพียงคนเดียวเท่านั้น
+    """
+
+    def setUp(self):
+        self.manager = User.objects.create_user(
+            userid="manager",
+            email="manager@test.com",
+            password="managerpass123",
+            first_name="Manager",
+        )
+        self.employee_a = User.objects.create_user(
+            userid="employee_a",
+            email="a@test.com",
+            password="pass123",
+            first_name="Employee A",
+        )
+        self.employee_b = User.objects.create_user(
+            userid="employee_b",
+            email="b@test.com",
+            password="pass123",
+            first_name="Employee B",
+        )
+        self.open_task = Task.objects.create(
+            title="Open Task for Concurrency Test",
+            created_by=self.manager,
+            task_date=timezone.now().date(),
+            deadline=timezone.now() + timezone.timedelta(hours=4),
+            estimated_minutes=30,
+            is_open=True,
+            reward=100,
+            status=Task.Status.SCHEDULED,
+        )
+
+    def test_first_claim_succeeds(self):
+        """Employee A claim สำเร็จ"""
+        result = TaskService.claim_task(self.open_task, self.employee_a)
+        self.assertEqual(result.claimed_by, self.employee_a)
+        self.assertFalse(result.is_open)
+        self.assertEqual(result.status, Task.Status.ACCEPTED)
+
+    def test_second_claim_fails(self):
+        """Employee B claim ไม่ได้หลังจาก A claim แล้ว"""
+        # A claim ก่อน
+        TaskService.claim_task(self.open_task, self.employee_a)
+        
+        # B claim ต้องล้มเหลว
+        # After A claims, is_open=False, so the error is "งานนี้ไม่ใช่งานเปิดรับ"
+        with self.assertRaises(ValueError) as context:
+            TaskService.claim_task(self.open_task, self.employee_b)
+        self.assertTrue(
+            "ถูกแย่ง" in str(context.exception) or "ไม่ใช่งานเปิดรับ" in str(context.exception)
+        )
+        
+        # ตรวจสอบว่า A ยังเป็น owner
+        self.open_task.refresh_from_db()
+        self.assertEqual(self.open_task.claimed_by, self.employee_a)
+
+    def test_only_one_assignment_created(self):
+        """มี TaskAssignment เพียง 1 รายการหลัง claim"""
+        TaskService.claim_task(self.open_task, self.employee_a)
+        
+        with self.assertRaises(ValueError):
+            TaskService.claim_task(self.open_task, self.employee_b)
+        
+        assignments = self.open_task.assignments.all()
+        self.assertEqual(assignments.count(), 1)
+        self.assertEqual(assignments.first().assigned_to, self.employee_a)
+
+    def test_claim_non_open_task_fails(self):
+        """ไม่สามารถ claim งานที่ไม่ใช่ open task ได้"""
+        assigned_task = Task.objects.create(
+            title="Assigned Task",
+            created_by=self.manager,
+            task_date=timezone.now().date(),
+            deadline=timezone.now() + timezone.timedelta(hours=4),
+            estimated_minutes=30,
+            is_open=False,
+            status=Task.Status.SCHEDULED,
+        )
+        
+        with self.assertRaises(ValueError) as context:
+            TaskService.claim_task(assigned_task, self.employee_a)
+        self.assertIn("ไม่ใช่งานเปิดรับ", str(context.exception))

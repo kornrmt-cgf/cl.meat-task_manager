@@ -1,3 +1,4 @@
+from core.utils import today_local
 """
 ReportingService - Business logic สำหรับ dashboard, reports, และ metrics
 
@@ -40,7 +41,7 @@ class ReportingService:
             dict ของ统计数据
         """
         if target_date is None:
-            target_date = timezone.now().date()
+            target_date = today_local()
 
         now = timezone.now()
 
@@ -140,7 +141,7 @@ class ReportingService:
             list ของ dict แต่ละ dict มีข้อมูล workload ของ employee 1 คน
         """
         if target_date is None:
-            target_date = timezone.now().date()
+            target_date = today_local()
 
         now = timezone.now()
 
@@ -197,7 +198,7 @@ class ReportingService:
             dict ของข้อมูล employee
         """
         if date_from is None:
-            date_from = timezone.now().date()
+            date_from = today_local()
         if date_to is None:
             date_to = date_from
 
@@ -259,7 +260,7 @@ class ReportingService:
             list ของ dict แต่ละ dict มีข้อมูลทีม 1 ทีม
         """
         if target_date is None:
-            target_date = timezone.now().date()
+            target_date = today_local()
 
         now = timezone.now()
 
@@ -409,7 +410,7 @@ class ReportingService:
             dict ของรายงาน
         """
         if target_date is None:
-            target_date = timezone.now().date()
+            target_date = today_local()
 
         now = timezone.now()
 
@@ -462,7 +463,7 @@ class ReportingService:
             dict ของรายงาน
         """
         if date_from is None:
-            date_from = timezone.now().date()
+            date_from = today_local()
         if date_to is None:
             date_to = date_from
 
@@ -551,7 +552,7 @@ class ReportingService:
             dict ของ metrics
         """
         if date_from is None:
-            date_from = timezone.now().date()
+            date_from = today_local()
         if date_to is None:
             date_to = date_from
 

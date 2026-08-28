@@ -1,3 +1,4 @@
+from core.utils import today_local
 """
 Views สำหรับ scheduling app
 
@@ -52,9 +53,9 @@ class WeekView(LoginRequiredMixin, TemplateView):
             try:
                 reference_date = timezone.datetime.strptime(date_str, "%Y-%m-%d").date()
             except ValueError:
-                reference_date = timezone.now().date()
+                reference_date = today_local()
         else:
-            reference_date = timezone.now().date()
+            reference_date = today_local()
 
         schedule, monday, sunday = SchedulingService.get_employee_week_tasks(
             self.request.user, reference_date
@@ -64,7 +65,7 @@ class WeekView(LoginRequiredMixin, TemplateView):
         context["monday"] = monday
         context["sunday"] = sunday
         context["reference_date"] = reference_date
-        context["today"] = timezone.now().date()
+        context["today"] = today_local()
 
         # ข้อมูลสัปดาห์ก่อน/ถัดไป
         context["prev_week"] = monday - timedelta(days=7)
@@ -95,9 +96,9 @@ class ManagerScheduleView(LoginRequiredMixin, ManagerRequiredMixin, TemplateView
             try:
                 reference_date = timezone.datetime.strptime(date_str, "%Y-%m-%d").date()
             except ValueError:
-                reference_date = timezone.now().date()
+                reference_date = today_local()
         else:
-            reference_date = timezone.now().date()
+            reference_date = today_local()
 
         # Filter employee
         employee_id = self.request.GET.get("employee")
@@ -122,7 +123,7 @@ class ManagerScheduleView(LoginRequiredMixin, ManagerRequiredMixin, TemplateView
         context["reference_date"] = reference_date
         context["prev_date"] = reference_date - timedelta(days=1)
         context["next_date"] = reference_date + timedelta(days=1)
-        context["today"] = timezone.now().date()
+        context["today"] = today_local()
         context["selected_employee"] = employee
         context["selected_team"] = team
 
@@ -150,9 +151,9 @@ class ManagerWeekView(LoginRequiredMixin, ManagerRequiredMixin, TemplateView):
             try:
                 reference_date = timezone.datetime.strptime(date_str, "%Y-%m-%d").date()
             except ValueError:
-                reference_date = timezone.now().date()
+                reference_date = today_local()
         else:
-            reference_date = timezone.now().date()
+            reference_date = today_local()
 
         employee_id = self.request.GET.get("employee")
         employee = None
@@ -183,7 +184,7 @@ class ManagerWeekView(LoginRequiredMixin, ManagerRequiredMixin, TemplateView):
         context["monday"] = monday
         context["sunday"] = sunday
         context["reference_date"] = reference_date
-        context["today"] = timezone.now().date()
+        context["today"] = today_local()
         context["prev_week"] = monday - timedelta(days=7)
         context["next_week"] = sunday + timedelta(days=1)
         context["selected_employee"] = employee
@@ -317,9 +318,9 @@ class GenerateRecurringView(LoginRequiredMixin, ManagerRequiredMixin, View):
             try:
                 target_date = timezone.datetime.strptime(date_str, "%Y-%m-%d").date()
             except ValueError:
-                target_date = timezone.now().date()
+                target_date = today_local()
         else:
-            target_date = timezone.now().date()
+            target_date = today_local()
 
         tasks = SchedulingService.generate_recurring_tasks(target_date, request.user)
         messages.success(request, f"สร้างงานประจำ {len(tasks)} รายการ สำหรับวันที่ {target_date}")
@@ -393,9 +394,9 @@ class TaskTemplateCreateTaskView(LoginRequiredMixin, ManagerRequiredMixin, View)
             try:
                 target_date = timezone.datetime.strptime(date_str, "%Y-%m-%d").date()
             except ValueError:
-                target_date = timezone.now().date()
+                target_date = today_local()
         else:
-            target_date = timezone.now().date()
+            target_date = today_local()
 
         assign_to = None
         if employee_id:

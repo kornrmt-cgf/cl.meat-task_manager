@@ -1,3 +1,4 @@
+from core.utils import today_local
 """
 Views สำหรับ dashboard app
 
@@ -60,9 +61,9 @@ class ManagerDashboardView(LoginRequiredMixin, ManagerRequiredMixin, TemplateVie
             try:
                 target_date = timezone.datetime.strptime(date_str, "%Y-%m-%d").date()
             except ValueError:
-                target_date = timezone.now().date()
+                target_date = today_local()
         else:
-            target_date = timezone.now().date()
+            target_date = today_local()
 
         # สถิติ dashboard
         stats = ReportingService.get_dashboard_stats(target_date)
@@ -77,7 +78,7 @@ class ManagerDashboardView(LoginRequiredMixin, ManagerRequiredMixin, TemplateVie
         # ข้อมูลวันก่อน/ถัดไป
         context["prev_date"] = target_date - timedelta(days=1)
         context["next_date"] = target_date + timedelta(days=1)
-        context["today"] = timezone.now().date()
+        context["today"] = today_local()
 
         return context
 
@@ -97,13 +98,13 @@ class EmployeeWorkloadView(LoginRequiredMixin, ManagerRequiredMixin, TemplateVie
             try:
                 target_date = timezone.datetime.strptime(date_str, "%Y-%m-%d").date()
             except ValueError:
-                target_date = timezone.now().date()
+                target_date = today_local()
         else:
-            target_date = timezone.now().date()
+            target_date = today_local()
 
         context["employee_workload"] = ReportingService.get_employee_workload(target_date)
         context["target_date"] = target_date
-        context["today"] = timezone.now().date()
+        context["today"] = today_local()
 
         return context
 
@@ -125,7 +126,7 @@ class EmployeeDetailView(LoginRequiredMixin, ManagerRequiredMixin, TemplateView)
         date_from_str = self.request.GET.get("date_from")
         date_to_str = self.request.GET.get("date_to")
 
-        today = timezone.now().date()
+        today = today_local()
 
         if date_from_str:
             try:
@@ -172,12 +173,12 @@ class TeamOverviewView(LoginRequiredMixin, ManagerRequiredMixin, TemplateView):
             try:
                 target_date = timezone.datetime.strptime(date_str, "%Y-%m-%d").date()
             except ValueError:
-                target_date = timezone.now().date()
+                target_date = today_local()
         else:
-            target_date = timezone.now().date()
+            target_date = today_local()
 
         context["team_overview"] = ReportingService.get_team_overview(target_date)
         context["target_date"] = target_date
-        context["today"] = timezone.now().date()
+        context["today"] = today_local()
 
         return context
