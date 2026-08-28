@@ -1,0 +1,1044 @@
+"""
+Tests สำหรับ tasks app
+
+ทดสอบ:
+- Task model
+- TaskAssignment model
+- TaskActivity model
+- TaskReport model
+- TaskService
+- Task views
+"""
+
+from datetime import timedelta
+
+from django.contrib.auth import get_user_model
+from django.test import Client, TestCase
+from django.urls import reverse
+from django.utils import timezone
+
+from tasks.models import Task, TaskActivity, TaskAssignment, TaskDependency, TaskReport
+from tasks.services import TaskService
+
+User = get_user_model()
+
+
+# === Model Tests ===
+
+
+class TaskModelTest(TestCase):
+    """ทดสอบ Task model"""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            userid="test",
+            email="test@example.com",
+            password="testpass123",
+        )
+        self.task = Task.objects.create(
+            title="ทดสอบงาน",
+            description="รายละเอียดงานทดสอบ",
+            category="production",
+            priority=3,
+            status=Task.Status.SCHEDULED,
+            deadline=timezone.now() + timedelta(hours=8),
+            created_by=self.user,
+        )
+
+    def test_create_task(self):
+        """ทดสอบสร้าง task"""
+        self.assertEqual(self.task.title, "ทดสอบงาน")
+        self.assertEqual(self.task.status, Task.Status.SCHEDULED)
+        self.assertEqual(self.task.priority, 3)
+
+    def test_task_str(self):
+        """ทดสอบ __str__"""
+        self.assertEqual(str(self.task), "[กำหนดไว้] ทดสอบงาน")
+
+    def test_task_is_overdue(self):
+        """ทดสอบ is_overdue property"""
+        self.assertFalse(self.task.is_overdue)
+
+        overdue_task = Task.objects.create(
+            title="งานเกินกำหนด",
+            status=Task.Status.IN_PROGRESS,
+            deadline=timezone.now() - timedelta(hours=1),
+            created_by=self.user,
+        )
+        self.assertTrue(overdue_task.is_overdue)
+
+    def test_task_not_overdue_when_completed(self):
+        """ทดสอบว่า task ที่เสร็จแล้วไม่ถือว่าเกินกำหนด"""
+        completed_task = Task.objects.create(
+            title="งานเสร็จแล้ว",
+            status=Task.Status.COMPLETED,
+            deadline=timezone.now() - timedelta(hours=1),
+            created_by=self.user,
+        )
+        self.assertFalse(completed_task.is_overdue)
+
+    def test_task_priority_badge_class(self):
+        """ทดสอบ priority badge class"""
+        self.task.priority = Task.Priority.LOW
+        self.assertEqual(self.task.priority_badge_class, "badge-low")
+
+        self.task.priority = Task.Priority.URGENT
+        self.assertEqual(self.task.priority_badge_class, "badge-urgent")
+
+    def test_task_status_color(self):
+        """ทดสอบ status color"""
+        self.task.status = Task.Status.COMPLETED
+        self.assertEqual(self.task.status_color, "#10b981")
+
+
+class TaskAssignmentTest(TestCase):
+    """ทดสอบ TaskAssignment model"""
+
+    def setUp(self):
+        self.user1 = User.objects.create_user(
+            userid="user1",
+            email="user1@example.com",
+            password="testpass123",
+        )
+        self.user2 = User.objects.create_user(
+            userid="user2",
+            email="user2@example.com",
+            password="testpass123",
+        )
+        self.task = Task.objects.create(
+            title="ทดสอบงาน",
+            created_by=self.user1,
+        )
+        self.assignment = TaskAssignment.objects.create(
+            task=self.task,
+            assigned_to=self.user1,
+            assigned_by=self.user2,
+            is_primary=True,
+        )
+
+    def test_create_assignment(self):
+        """ทดสอบสร้าง assignment"""
+        self.assertEqual(self.assignment.task, self.task)
+        self.assertEqual(self.assignment.assigned_to, self.user1)
+        self.assertTrue(self.assignment.is_primary)
+
+    def test_assignment_str(self):
+        """ทดสอบ __str__"""
+        self.assertEqual(str(self.assignment), f"{self.user1.display_name} <- {self.task.title}")
+
+
+class TaskActivityTest(TestCase):
+    """ทดสอบ TaskActivity model"""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            userid="test",
+            email="test@example.com",
+            password="testpass123",
+        )
+        self.task = Task.objects.create(
+            title="ทดสอบงาน",
+            created_by=self.user,
+        )
+        self.activity = TaskActivity.objects.create(
+            task=self.task,
+            user=self.user,
+            action=TaskActivity.Action.CREATED,
+            new_status=Task.Status.SCHEDULED,
+            description="สร้างงานทดสอบ",
+        )
+
+    def test_create_activity(self):
+        """ทดสอบสร้าง activity"""
+        self.assertEqual(self.activity.task, self.task)
+        self.assertEqual(self.activity.action, TaskActivity.Action.CREATED)
+
+    def test_activity_str(self):
+        """ทดสอบ __str__"""
+        self.assertEqual(str(self.activity), "ทดสอบงาน - สร้างงาน")
+
+
+class TaskReportTest(TestCase):
+    """ทดสอบ TaskReport model"""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            userid="test",
+            email="test@example.com",
+            password="testpass123",
+        )
+        self.task = Task.objects.create(
+            title="ทดสอบงาน",
+            created_by=self.user,
+        )
+        self.report = TaskReport.objects.create(
+            task=self.task,
+            reported_by=self.user,
+            report_type=TaskReport.ReportType.PROBLEM,
+            title="ปัญหาเครื่องจักร",
+            description="เครื่องหั่นเนื้อทำงานผิดปกติ",
+        )
+
+    def test_create_report(self):
+        """ทดสอบสร้าง report"""
+        self.assertEqual(self.report.task, self.task)
+        self.assertFalse(self.report.resolved)
+
+    def test_report_str(self):
+        """ทดสอบ __str__"""
+        self.assertEqual(str(self.report), "[ปัญหา] ปัญหาเครื่องจักร")
+
+
+class TaskDependencyTest(TestCase):
+    """ทดสอบ TaskDependency model"""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            userid="test",
+            email="test@example.com",
+            password="testpass123",
+        )
+        self.task1 = Task.objects.create(
+            title="งานที่ 1",
+            created_by=self.user,
+        )
+        self.task2 = Task.objects.create(
+            title="งานที่ 2",
+            created_by=self.user,
+        )
+        self.dependency = TaskDependency.objects.create(
+            task=self.task2,
+            depends_on=self.task1,
+        )
+
+    def test_create_dependency(self):
+        """ทดสอบสร้าง dependency"""
+        self.assertEqual(self.dependency.task, self.task2)
+        self.assertEqual(self.dependency.depends_on, self.task1)
+
+    def test_dependency_str(self):
+        """ทดสอบ __str__"""
+        self.assertEqual(str(self.dependency), "งานที่ 2 รอ งานที่ 1")
+
+
+# === Service Tests ===
+
+
+class TaskServiceTest(TestCase):
+    """ทดสอบ TaskService"""
+
+    def setUp(self):
+        self.admin = User.objects.create_user(
+            userid="admin",
+            email="admin@example.com",
+            password="adminpass123",
+        )
+        self.staff = User.objects.create_user(
+            userid="staff",
+            email="staff@example.com",
+            password="staffpass123",
+        )
+
+    def test_create_task(self):
+        """ทดสอบสร้างงาน"""
+        task = TaskService.create_task(
+            title="ทดสอบสร้างงาน",
+            created_by=self.admin,
+            description="รายละเอียด",
+            category="production",
+            priority=3,
+        )
+
+        self.assertEqual(task.title, "ทดสอบสร้างงาน")
+        self.assertEqual(task.status, Task.Status.SCHEDULED)
+
+        activity = TaskActivity.objects.filter(task=task).first()
+        self.assertIsNotNone(activity)
+        self.assertEqual(activity.action, TaskActivity.Action.CREATED)
+
+    def test_create_task_with_assignment(self):
+        """ทดสอบสร้างงานพร้อมมอบหมาย"""
+        task = TaskService.create_task(
+            title="ทดสอบมอบหมาย",
+            created_by=self.admin,
+            assign_to=[self.staff],
+        )
+
+        assignment = TaskAssignment.objects.filter(task=task).first()
+        self.assertIsNotNone(assignment)
+        self.assertEqual(assignment.assigned_to, self.staff)
+
+    def test_accept_task(self):
+        """ทดสอบรับงาน"""
+        task = Task.objects.create(
+            title="ทดสอบรับงาน",
+            status=Task.Status.READY,
+            created_by=self.admin,
+        )
+        TaskAssignment.objects.create(
+            task=task,
+            assigned_to=self.staff,
+            assigned_by=self.admin,
+        )
+
+        updated_task = TaskService.accept_task(task, self.staff)
+        self.assertEqual(updated_task.status, Task.Status.ACCEPTED)
+
+    def test_accept_task_wrong_status(self):
+        """ทดสอบรับงานที่สถานะไม่ถูกต้อง"""
+        task = Task.objects.create(
+            title="ทดสอบรับงาน",
+            status=Task.Status.COMPLETED,
+            created_by=self.admin,
+        )
+
+        with self.assertRaises(ValueError):
+            TaskService.accept_task(task, self.staff)
+
+    def test_start_task(self):
+        """ทดสอบเริ่มทำงาน"""
+        task = Task.objects.create(
+            title="ทดสอบเริ่มงาน",
+            status=Task.Status.ACCEPTED,
+            created_by=self.admin,
+        )
+        TaskAssignment.objects.create(
+            task=task,
+            assigned_to=self.staff,
+            assigned_by=self.admin,
+        )
+
+        updated_task = TaskService.start_task(task, self.staff)
+        self.assertEqual(updated_task.status, Task.Status.IN_PROGRESS)
+
+    def test_complete_task(self):
+        """ทดสอบเสร็จงาน"""
+        task = Task.objects.create(
+            title="ทดสอบเสร็จงาน",
+            status=Task.Status.IN_PROGRESS,
+            created_by=self.admin,
+        )
+        TaskAssignment.objects.create(
+            task=task,
+            assigned_to=self.staff,
+            assigned_by=self.admin,
+        )
+
+        updated_task = TaskService.complete_task(
+            task,
+            self.staff,
+            actual_minutes=30,
+        )
+        self.assertEqual(updated_task.status, Task.Status.COMPLETED)
+        self.assertEqual(updated_task.actual_minutes, 30)
+
+    def test_report_problem(self):
+        """ทดสอบรายงานปัญหา"""
+        task = Task.objects.create(
+            title="ทดสอบรายงานปัญหา",
+            status=Task.Status.IN_PROGRESS,
+            created_by=self.admin,
+        )
+        TaskAssignment.objects.create(
+            task=task,
+            assigned_to=self.staff,
+            assigned_by=self.admin,
+        )
+
+        updated_task = TaskService.report_problem(
+            task,
+            self.staff,
+            title="เครื่องเสีย",
+            description="เครื่องหั่นเนื้อไม่ทำงาน",
+        )
+        self.assertEqual(updated_task.status, Task.Status.PROBLEM)
+
+    def test_report_error(self):
+        """ทดสอบรายงานข้อผิดพลาด"""
+        task = Task.objects.create(
+            title="ทดสอบรายงานข้อผิดพลาด",
+            status=Task.Status.IN_PROGRESS,
+            created_by=self.admin,
+        )
+        TaskAssignment.objects.create(
+            task=task,
+            assigned_to=self.staff,
+            assigned_by=self.admin,
+        )
+
+        updated_task = TaskService.report_error(
+            task,
+            self.staff,
+            title="ข้อผิดพลาดระบบ",
+            description="ระบบไม่บันทึกข้อมูล",
+        )
+        self.assertEqual(updated_task.status, Task.Status.ERROR)
+
+    def test_postpone_task(self):
+        """ทดสอบเลื่อนงาน"""
+        task = Task.objects.create(
+            title="ทดสอบเลื่อนงาน",
+            status=Task.Status.IN_PROGRESS,
+            created_by=self.admin,
+        )
+
+        updated_task = TaskService.postpone_task(
+            task,
+            self.staff,
+            reason="รอวัตถุดิบ",
+        )
+        self.assertEqual(updated_task.status, Task.Status.POSTPONED)
+        self.assertIn("รอวัตถุดิบ", updated_task.notes)
+
+    def test_cancel_task(self):
+        """ทดสอบยกเลิกงาน"""
+        task = Task.objects.create(
+            title="ทดสอบยกเลิกงาน",
+            status=Task.Status.IN_PROGRESS,
+            created_by=self.admin,
+        )
+
+        updated_task = TaskService.cancel_task(task, self.staff)
+        self.assertEqual(updated_task.status, Task.Status.CANCELLED)
+
+    def test_get_user_tasks_today(self):
+        """ทดสอบดึงงานวันนี้"""
+        task = Task.objects.create(
+            title="งานวันนี้",
+            status=Task.Status.READY,
+            deadline=timezone.now().replace(hour=10, minute=0),
+            created_by=self.admin,
+        )
+        TaskAssignment.objects.create(
+            task=task,
+            assigned_to=self.staff,
+            assigned_by=self.admin,
+        )
+
+        tasks = TaskService.get_user_tasks_today(self.staff)
+        self.assertIn(task, tasks)
+
+    def test_get_all_active_tasks(self):
+        """ทดสอบดึงงานที่ยังไม่เสร็จ"""
+        for status in [
+            Task.Status.SCHEDULED,
+            Task.Status.READY,
+            Task.Status.IN_PROGRESS,
+        ]:
+            task = Task.objects.create(
+                title=f"งาน {status}",
+                status=status,
+                created_by=self.admin,
+            )
+            TaskAssignment.objects.create(
+                task=task,
+                assigned_to=self.staff,
+                assigned_by=self.admin,
+            )
+
+        completed_task = Task.objects.create(
+            title="งานเสร็จแล้ว",
+            status=Task.Status.COMPLETED,
+            created_by=self.admin,
+        )
+        TaskAssignment.objects.create(
+            task=completed_task,
+            assigned_to=self.staff,
+            assigned_by=self.admin,
+        )
+
+        tasks = TaskService.get_all_active_tasks(self.staff)
+        self.assertEqual(tasks.count(), 3)
+        self.assertNotIn(completed_task, tasks)
+
+
+# === View Tests ===
+
+
+class TaskViewTest(TestCase):
+    """ทดสอบ Task views"""
+
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create_user(
+            userid="test",
+            email="test@example.com",
+            password="testpass123",
+        )
+        self.admin = User.objects.create_user(
+            userid="admin",
+            email="admin@example.com",
+            password="adminpass123",
+        )
+        self.client.login(userid="test", password="testpass123")
+
+    def test_today_view_requires_login(self):
+        """ทดสอบ TodayView ต้อง login"""
+        self.client.logout()
+        response = self.client.get(reverse("tasks:today"))
+        self.assertEqual(response.status_code, 302)
+
+    def test_today_view(self):
+        """ทดสอบ TodayView"""
+        task = Task.objects.create(
+            title="งานวันนี้",
+            status=Task.Status.READY,
+            deadline=timezone.now().replace(hour=10, minute=0),
+            created_by=self.admin,
+        )
+        TaskAssignment.objects.create(
+            task=task,
+            assigned_to=self.user,
+            assigned_by=self.admin,
+        )
+
+        response = self.client.get(reverse("tasks:today"))
+        self.assertEqual(response.status_code, 200)
+
+    def test_tomorrow_view(self):
+        """ทดสอบ TomorrowView"""
+        tomorrow = timezone.now() + timedelta(days=1, hours=10)
+        task = Task.objects.create(
+            title="งานพรุ่งนี้",
+            status=Task.Status.SCHEDULED,
+            deadline=tomorrow,
+            created_by=self.admin,
+        )
+        TaskAssignment.objects.create(
+            task=task,
+            assigned_to=self.user,
+            assigned_by=self.admin,
+        )
+
+        response = self.client.get(reverse("tasks:tomorrow"))
+        self.assertEqual(response.status_code, 200)
+
+    def test_task_create_view_manager(self):
+        """ทดสอบ TaskCreateView - manager สร้างงานได้"""
+        from accounts.models import Role, EmployeeProfile
+
+        # สร้าง role manager
+        role = Role.objects.create(name="Manager", slug="manager")
+        EmployeeProfile.objects.create(user=self.admin, role=role)
+
+        self.client.login(userid="admin", password="adminpass123")
+
+        response = self.client.get(reverse("tasks:create"))
+        self.assertEqual(response.status_code, 200)
+
+        response = self.client.post(
+            reverse("tasks:create"),
+            {
+                "title": "งานทดสอบ",
+                "description": "รายละเอียด",
+                "category": "production",
+                "priority": 3,
+                "work_mode": "assigned",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+
+        task = Task.objects.filter(title="งานทดสอบ").first()
+        self.assertIsNotNone(task)
+
+    def test_task_create_view_employee_forbidden(self):
+        """ทดสอบ TaskCreateView - employee สร้างงานไม่ได้"""
+        self.client.login(userid="staff", password="staffpass123")
+
+        response = self.client.get(reverse("tasks:create"))
+        self.assertIn(response.status_code, [302, 403])
+
+    def test_task_detail_view(self):
+        """ทดสอบ TaskDetailView"""
+        task = Task.objects.create(
+            title="งานทดสอบ",
+            created_by=self.admin,
+        )
+        TaskAssignment.objects.create(
+            task=task,
+            assigned_to=self.user,
+            assigned_by=self.admin,
+        )
+
+        response = self.client.get(reverse("tasks:detail", args=[task.pk]))
+        self.assertEqual(response.status_code, 200)
+
+    def test_task_accept(self):
+        """ทดสอบรับงาน"""
+        task = Task.objects.create(
+            title="งานทดสอบรับ",
+            status=Task.Status.READY,
+            created_by=self.admin,
+        )
+        TaskAssignment.objects.create(
+            task=task,
+            assigned_to=self.user,
+            assigned_by=self.admin,
+        )
+
+        response = self.client.post(reverse("tasks:accept", args=[task.pk]))
+        self.assertEqual(response.status_code, 302)
+
+        task.refresh_from_db()
+        self.assertEqual(task.status, Task.Status.ACCEPTED)
+
+    def test_task_start(self):
+        """ทดสอบเริ่มทำงาน"""
+        task = Task.objects.create(
+            title="งานทดสอบเริ่ม",
+            status=Task.Status.ACCEPTED,
+            created_by=self.admin,
+        )
+        TaskAssignment.objects.create(
+            task=task,
+            assigned_to=self.user,
+            assigned_by=self.admin,
+        )
+
+        response = self.client.post(reverse("tasks:start", args=[task.pk]))
+        self.assertEqual(response.status_code, 302)
+
+        task.refresh_from_db()
+        self.assertEqual(task.status, Task.Status.IN_PROGRESS)
+
+    def test_task_complete(self):
+        """ทดสอบเสร็จงาน"""
+        task = Task.objects.create(
+            title="งานทดสอบเสร็จ",
+            status=Task.Status.IN_PROGRESS,
+            created_by=self.admin,
+        )
+        TaskAssignment.objects.create(
+            task=task,
+            assigned_to=self.user,
+            assigned_by=self.admin,
+        )
+
+        response = self.client.post(reverse("tasks:complete", args=[task.pk]))
+        self.assertEqual(response.status_code, 302)
+
+        task.refresh_from_db()
+        self.assertEqual(task.status, Task.Status.COMPLETED)
+
+    def test_task_list_view(self):
+        """ทดสอบ TaskListView"""
+        for i in range(5):
+            task = Task.objects.create(
+                title=f"งานที่ {i}",
+                status=Task.Status.READY,
+                created_by=self.admin,
+            )
+            TaskAssignment.objects.create(
+                task=task,
+                assigned_to=self.user,
+                assigned_by=self.admin,
+            )
+
+        response = self.client.get(reverse("tasks:list"))
+        self.assertEqual(response.status_code, 200)
+
+
+# === Permission Tests ===
+
+
+class PermissionTest(TestCase):
+    """ทดสอบสิทธิ์การเข้าถึง"""
+
+    def setUp(self):
+        self.client = Client()
+        self.manager = User.objects.create_user(
+            userid="manager",
+            email="manager@example.com",
+            password="managerpass123",
+            is_staff=True,
+        )
+        self.employee1 = User.objects.create_user(
+            userid="employee1",
+            email="employee1@example.com",
+            password="emp1pass123",
+        )
+        self.employee2 = User.objects.create_user(
+            userid="employee2",
+            email="employee2@example.com",
+            password="emp2pass123",
+        )
+        self.task = Task.objects.create(
+            title="งานทดสอบสิทธิ์",
+            created_by=self.manager,
+        )
+        TaskAssignment.objects.create(
+            task=self.task,
+            assigned_to=self.employee1,
+            assigned_by=self.manager,
+        )
+
+    def test_employee_can_access_own_task(self):
+        """ทดสอบว่า employee เข้าถึงงานของตัวเองได้"""
+        self.client.login(userid="employee1", password="emp1pass123")
+        response = self.client.get(reverse("tasks:detail", args=[self.task.pk]))
+        self.assertEqual(response.status_code, 200)
+
+    def test_employee_cannot_access_other_task(self):
+        """ทดสอบว่า employee เข้าถึงงานของคนอื่นไม่ได้"""
+        self.client.login(userid="employee2", password="emp2pass123")
+        response = self.client.get(reverse("tasks:detail", args=[self.task.pk]))
+        self.assertEqual(response.status_code, 404)
+
+    def test_manager_can_access_any_task(self):
+        """ทดสอบว่า manager เข้าถึงงานทุกงานได้"""
+        self.client.login(userid="manager", password="managerpass123")
+        response = self.client.get(reverse("tasks:detail", args=[self.task.pk]))
+        self.assertEqual(response.status_code, 200)
+
+    def test_employee_cannot_create_task(self):
+        """ทดสอบว่า employee สร้างงานไม่ได้"""
+        self.client.login(userid="employee1", password="emp1pass123")
+        response = self.client.get(reverse("tasks:create"))
+        self.assertIn(response.status_code, [302, 403])
+
+    def test_manager_can_create_task(self):
+        """ทดสอบว่า manager สร้างงานได้"""
+        from accounts.models import Role, EmployeeProfile
+        role = Role.objects.create(name="Manager", slug="manager")
+        EmployeeProfile.objects.create(user=self.manager, role=role)
+
+        self.client.login(userid="manager", password="managerpass123")
+        response = self.client.get(reverse("tasks:create"))
+        self.assertEqual(response.status_code, 200)
+
+    def test_employee_cannot_edit_task(self):
+        """ทดสอบว่า employee แก้ไขงานไม่ได้"""
+        self.client.login(userid="employee1", password="emp1pass123")
+        response = self.client.get(reverse("tasks:edit", args=[self.task.pk]))
+        self.assertIn(response.status_code, [302, 403])
+
+    def test_unauthenticated_cannot_access_task(self):
+        """ทดสอบว่า user ที่ไม่ login เข้าถึงงานไม่ได้"""
+        response = self.client.get(reverse("tasks:detail", args=[self.task.pk]))
+        self.assertEqual(response.status_code, 302)  # redirect to login
+
+    def test_employee_cannot_accept_unassigned_task(self):
+        """ทดสอบว่า employee รับงานที่ไม่ได้มอบหมายไม่ได้"""
+        self.client.login(userid="employee2", password="emp2pass123")
+        response = self.client.post(reverse("tasks:accept", args=[self.task.pk]))
+        # TaskAccessMixin ป้องกันด้วย 404 เพื่อไม่ให้ leak ข้อมูล
+        self.assertEqual(response.status_code, 404)
+        self.task.refresh_from_db()
+        self.assertEqual(self.task.status, Task.Status.SCHEDULED)  # ไม่เปลี่ยน
+
+
+# === Status Transition Tests ===
+
+
+class StatusTransitionTest(TestCase):
+    """ทดสอบ valid/invalid status transitions"""
+
+    def setUp(self):
+        self.admin = User.objects.create_user(
+            userid="admin",
+            email="admin@example.com",
+            password="adminpass123",
+        )
+        self.staff = User.objects.create_user(
+            userid="staff",
+            email="staff@example.com",
+            password="staffpass123",
+        )
+
+    def test_valid_transition_scheduled_to_ready(self):
+        """ทดสอบการเปลี่ยนสถานะ: SCHEDULED -> READY"""
+        task = Task.objects.create(
+            title="ทดสอบ SCHEDULED -> READY",
+            status=Task.Status.SCHEDULED,
+            created_by=self.admin,
+        )
+        TaskAssignment.objects.create(
+            task=task, assigned_to=self.staff, assigned_by=self.admin,
+        )
+
+        # Manager สามารถเปลี่ยนสถานะได้
+        task.status = Task.Status.READY
+        task.save(update_fields=["status"])
+        task.refresh_from_db()
+        self.assertEqual(task.status, Task.Status.READY)
+
+    def test_valid_transition_full_flow(self):
+        """ทดสอบ flow ทั้งหมด: SCHEDULED -> READY -> ACCEPTED -> IN_PROGRESS -> COMPLETED"""
+        task = Task.objects.create(
+            title="ทดสอบ full flow",
+            status=Task.Status.SCHEDULED,
+            created_by=self.admin,
+        )
+        TaskAssignment.objects.create(
+            task=task, assigned_to=self.staff, assigned_by=self.admin,
+        )
+
+        # ACCEPTED
+        TaskService.accept_task(task, self.staff)
+        self.assertEqual(task.status, Task.Status.ACCEPTED)
+
+        # IN_PROGRESS
+        TaskService.start_task(task, self.staff)
+        self.assertEqual(task.status, Task.Status.IN_PROGRESS)
+
+        # COMPLETED
+        TaskService.complete_task(task, self.staff)
+        self.assertEqual(task.status, Task.Status.COMPLETED)
+
+    def test_valid_transition_problem_flow(self):
+        """ทดสอบ flow ปัญหา: IN_PROGRESS -> PROBLEM"""
+        task = Task.objects.create(
+            title="ทดสอบ problem flow",
+            status=Task.Status.IN_PROGRESS,
+            created_by=self.admin,
+        )
+        TaskAssignment.objects.create(
+            task=task, assigned_to=self.staff, assigned_by=self.admin,
+        )
+
+        TaskService.report_problem(
+            task, self.staff, title="ทดสอบ", description="ทดสอบ",
+        )
+        self.assertEqual(task.status, Task.Status.PROBLEM)
+
+    def test_valid_transition_error_flow(self):
+        """ทดสอบ flow ข้อผิดพลาด: IN_PROGRESS -> ERROR"""
+        task = Task.objects.create(
+            title="ทดสอบ error flow",
+            status=Task.Status.IN_PROGRESS,
+            created_by=self.admin,
+        )
+        TaskAssignment.objects.create(
+            task=task, assigned_to=self.staff, assigned_by=self.admin,
+        )
+
+        TaskService.report_error(
+            task, self.staff, title="ทดสอบ", description="ทดสอบ",
+        )
+        self.assertEqual(task.status, Task.Status.ERROR)
+
+    def test_invalid_transition_accept_completed(self):
+        """ทดสอบว่ารับงานที่เสร็จแล้วไม่ได้"""
+        task = Task.objects.create(
+            title="ทดสอบ accept completed",
+            status=Task.Status.COMPLETED,
+            created_by=self.admin,
+        )
+        TaskAssignment.objects.create(
+            task=task, assigned_to=self.staff, assigned_by=self.admin,
+        )
+
+        with self.assertRaises(ValueError):
+            TaskService.accept_task(task, self.staff)
+
+    def test_invalid_transition_start_scheduled(self):
+        """ทดสอบว่าเริ่มงานที่ status=SCHEDULED ไม่ได้"""
+        task = Task.objects.create(
+            title="ทดสอบ start scheduled",
+            status=Task.Status.SCHEDULED,
+            created_by=self.admin,
+        )
+        TaskAssignment.objects.create(
+            task=task, assigned_to=self.staff, assigned_by=self.admin,
+        )
+
+        with self.assertRaises(ValueError):
+            TaskService.start_task(task, self.staff)
+
+    def test_invalid_transition_complete_accepted(self):
+        """ทดสอบว่าเสร็จงานที่ status=ACCEPTED ไม่ได้"""
+        task = Task.objects.create(
+            title="测试 complete accepted",
+            status=Task.Status.ACCEPTED,
+            created_by=self.admin,
+        )
+        TaskAssignment.objects.create(
+            task=task, assigned_to=self.staff, assigned_by=self.admin,
+        )
+
+        with self.assertRaises(ValueError):
+            TaskService.complete_task(task, self.staff)
+
+    def test_invalid_transition_problem_scheduled(self):
+        """ทดสอบว่ารายงานปัญหาที่ status=SCHEDULED ไม่ได้"""
+        task = Task.objects.create(
+            title="ทดสอบ problem scheduled",
+            status=Task.Status.SCHEDULED,
+            created_by=self.admin,
+        )
+        TaskAssignment.objects.create(
+            task=task, assigned_to=self.staff, assigned_by=self.admin,
+        )
+
+        with self.assertRaises(ValueError):
+            TaskService.report_problem(
+                task, self.staff, title="ทดสอบ", description="ทดสอบ",
+            )
+
+    def test_invalid_transition_cancel_completed(self):
+        """ทดสอบว่ายกเลิกงานที่เสร็จแล้วไม่ได้"""
+        task = Task.objects.create(
+            title="ทดสอบ cancel completed",
+            status=Task.Status.COMPLETED,
+            created_by=self.admin,
+        )
+
+        with self.assertRaises(ValueError):
+            TaskService.cancel_task(task, self.admin)
+
+    def test_activity_logged_on_transition(self):
+        """ทดสอบว่ามี activity log ทุกครั้งที่เปลี่ยนสถานะ"""
+        task = Task.objects.create(
+            title="ทดสอบ activity log",
+            status=Task.Status.SCHEDULED,
+            created_by=self.admin,
+        )
+        TaskAssignment.objects.create(
+            task=task, assigned_to=self.staff, assigned_by=self.admin,
+        )
+
+        initial_count = TaskActivity.objects.filter(task=task).count()
+
+        TaskService.accept_task(task, self.staff)
+
+        new_count = TaskActivity.objects.filter(task=task).count()
+        self.assertGreater(new_count, initial_count)
+
+
+# === Timezone Tests ===
+
+
+class TimezoneTest(TestCase):
+    """ทดสอบ Timezone behavior"""
+
+    def test_timezone_setting(self):
+        """ทดสอบว่า TIME_ZONE ตั้งค่าถูกต้อง"""
+        from django.conf import settings
+        self.assertEqual(settings.TIME_ZONE, "Asia/Bangkok")
+        self.assertTrue(settings.USE_TZ)
+
+    def test_task_date_timezone_aware(self):
+        """ทดสอบว่า datetime fields เป็น timezone-aware"""
+        user = User.objects.create_user(
+            userid="tz",
+            email="tz@example.com",
+            password="tzpass123",
+        )
+        task = Task.objects.create(
+            title="ทดสอบ timezone",
+            deadline=timezone.now() + timedelta(hours=8),
+            created_by=user,
+        )
+        self.assertIsNotNone(task.deadline.tzinfo)
+        self.assertIsNotNone(task.created_at.tzinfo)
+
+    def test_bangkok_time_conversion(self):
+        """ทดสอบการแปลงเวลาเป็นกรุงเทพ"""
+        from datetime import datetime
+
+        utc_time = datetime(2024, 1, 15, 10, 0, 0, tzinfo=timezone.utc)
+        bangkok_tz = timezone.get_current_timezone()
+        bangkok_time = utc_time.astimezone(bangkok_tz)
+
+        # UTC+7 = 17:00
+        self.assertEqual(bangkok_time.hour, 17)
+
+    def test_task_today_query_uses_task_date(self):
+        """ทดสอบว่า today view ใช้ task_date ในการ query"""
+        user = User.objects.create_user(
+            userid="today",
+            email="today@example.com",
+            password="todaypass123",
+        )
+        today = timezone.now().date()
+
+        # สร้าง task ที่มี task_date = วันนี้
+        task_today = Task.objects.create(
+            title="งานวันนี้",
+            task_date=today,
+            status=Task.Status.READY,
+            created_by=user,
+        )
+        TaskAssignment.objects.create(
+            task=task_today, assigned_to=user, assigned_by=user,
+        )
+
+        # สร้าง task ที่ไม่มี task_date (fallback ไป deadline)
+        task_deadline = Task.objects.create(
+            title="งาน deadline วันนี้",
+            task_date=None,
+            deadline=timezone.now().replace(hour=12, minute=0),
+            status=Task.Status.READY,
+            created_by=user,
+        )
+        TaskAssignment.objects.create(
+            task=task_deadline, assigned_to=user, assigned_by=user,
+        )
+
+        tasks = TaskService.get_user_tasks_today(user)
+        self.assertIn(task_today, tasks)
+        self.assertIn(task_deadline, tasks)
+
+
+# === Security Tests ===
+
+
+class SecurityTest(TestCase):
+    """ทดสอบความปลอดภัย"""
+
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create_user(
+            userid="user",
+            email="user@example.com",
+            password="userpass123",
+        )
+
+    def test_unauthenticated_redirect_to_login(self):
+        """ทดสอบว่าหน้าที่ต้อง login redirect ไปหน้า login"""
+        protected_urls = [
+            reverse("tasks:today"),
+            reverse("tasks:tomorrow"),
+            reverse("tasks:list"),
+            reverse("tasks:create"),
+        ]
+
+        for url in protected_urls:
+            response = self.client.get(url)
+            self.assertEqual(response.status_code, 302, f"URL {url} ไม่ redirect")
+            self.assertIn("login", response.url, f"URL {url} ไม่ redirect ไป login")
+
+    def test_cannot_access_other_user_task_via_url(self):
+        """ทดสอบว่าเข้าถึง task ของคนอื่นผ่าน URL ไม่ได้"""
+        other_user = User.objects.create_user(
+            userid="other",
+            email="other@example.com",
+            password="otherpass123",
+        )
+        task = Task.objects.create(
+            title="งานของคนอื่น",
+            created_by=other_user,
+        )
+        TaskAssignment.objects.create(
+            task=task, assigned_to=other_user, assigned_by=other_user,
+        )
+
+        self.client.login(userid="user", password="userpass123")
+        response = self.client.get(reverse("tasks:detail", args=[task.pk]))
+        self.assertEqual(response.status_code, 404)
+
+    def test_cannot_edit_other_user_task(self):
+        """ทดสอบว่าแก้ไข task ของคนอื่นไม่ได้"""
+        other_user = User.objects.create_user(
+            userid="other",
+            email="other@example.com",
+            password="otherpass123",
+        )
+        task = Task.objects.create(
+            title="งานของคนอื่น",
+            created_by=other_user,
+        )
+
+        self.client.login(userid="user", password="userpass123")
+        response = self.client.get(reverse("tasks:edit", args=[task.pk]))
+        self.assertIn(response.status_code, [302, 403])
