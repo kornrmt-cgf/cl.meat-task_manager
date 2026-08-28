@@ -451,7 +451,10 @@ class TaskService:
         """
         แย่งงาน (employee กดรับงานเปิด)
 
-        Rules:
+        Eligibility Rules:
+        - user ต้องเป็น authenticated
+        - user ต้องมี EmployeeProfile
+        - EmployeeProfile.status ต้องเป็น "active"
         - task.is_open ต้องเป็น True
         - task.claimed_by ต้องเป็น None (ยังไม่มีคนรับ)
         - สถานะต้องเป็น SCHEDULED หรือ READY
@@ -460,6 +463,20 @@ class TaskService:
             Task object
         """
         from django.utils import timezone as tz
+        from accounts.models import EmployeeProfile
+
+        # ตรวจสอบสิทธิ์ผู้ใช้
+        if not user.is_authenticated:
+            raise PermissionError("กรุณาเข้าสู่ระบบก่อนรับงาน")
+
+        # ตรวจสอบ EmployeeProfile
+        try:
+            profile = user.profile
+        except EmployeeProfile.DoesNotExist:
+            raise PermissionError("คุณไม่มีสิทธิ์รับงาน (ไม่มีข้อมูลพนักงาน)")
+
+        if profile.status != "active":
+            raise PermissionError("คุณไม่สามารถรับงานได้ (สถานะพนักงานไม่ active)")
 
         # Refresh task from DB with row lock to prevent race condition
         task = Task.objects.select_for_update().get(pk=task.pk)

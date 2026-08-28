@@ -18,6 +18,7 @@ from django.test import TestCase, Client
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 from django.utils import timezone
+from core.utils import today_local
 
 from accounts.models import EmployeeProfile, Team
 from tasks.models import Task, TaskAssignment, TaskReport
@@ -92,7 +93,7 @@ class ManagerDashboardViewTest(TestCase):
         EmployeeProfile.objects.create(user=self.employee, team=self.team)
 
         self.client.login(userid="manager", password="testpass123")
-        self.today = timezone.now().date()
+        self.today = today_local()
 
     def test_manager_dashboard_view(self):
         """ทดสอบว่า manager เข้า dashboard ได้"""
@@ -264,7 +265,7 @@ class EmployeeWorkloadViewTest(TestCase):
         EmployeeProfile.objects.create(user=self.employee)
 
         self.client.login(userid="manager", password="testpass123")
-        self.today = timezone.now().date()
+        self.today = today_local()
 
     def test_workload_view(self):
         """ทดสอบว่า employee workload view ทำงานได้"""
@@ -303,7 +304,7 @@ class EmployeeDetailViewTest(TestCase):
         EmployeeProfile.objects.create(user=self.employee)
 
         self.client.login(userid="manager", password="testpass123")
-        self.today = timezone.now().date()
+        self.today = today_local()
 
     def test_employee_detail_view(self):
         """ทดสอบว่า employee detail view ทำงานได้"""
@@ -382,7 +383,7 @@ class TeamOverviewViewTest(TestCase):
         EmployeeProfile.objects.create(user=self.manager)
 
         self.client.login(userid="manager", password="testpass123")
-        self.today = timezone.now().date()
+        self.today = today_local()
 
     def test_team_overview_view(self):
         """ทดสอบว่า team overview view ทำงานได้"""
@@ -451,7 +452,7 @@ class EmployeeWorkloadCountTest(TestCase):
         EmployeeProfile.objects.create(user=self.employee_b)
 
         self.client.login(userid="manager", password="testpass123")
-        self.today = timezone.now().date()
+        self.today = today_local()
 
     def test_employee_workload_correct_counts(self):
         """ทดสอบว่า workload counts ถูกต้อง"""

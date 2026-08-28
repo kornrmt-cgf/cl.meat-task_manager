@@ -22,6 +22,7 @@ from django.test import TestCase, Client
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 from django.utils import timezone
+from core.utils import today_local
 
 from accounts.models import EmployeeProfile, Team
 from tasks.models import Task, TaskAssignment, TaskReport
@@ -53,7 +54,7 @@ class DailyReportViewTest(TestCase):
         EmployeeProfile.objects.create(user=self.employee)
 
         self.client.login(userid="manager", password="testpass123")
-        self.today = timezone.now().date()
+        from core.utils import today_local; self.today = today_local()
 
     def test_daily_report_view(self):
         """ทดสอบว่า daily report view ทำงานได้"""
@@ -146,7 +147,7 @@ class EmployeeReportViewTest(TestCase):
         EmployeeProfile.objects.create(user=self.employee)
 
         self.client.login(userid="manager", password="testpass123")
-        self.today = timezone.now().date()
+        from core.utils import today_local; self.today = today_local()
 
     def test_employee_report_view(self):
         """ทดสอบว่า employee report view ทำงานได้"""
@@ -223,7 +224,7 @@ class StatusReportViewTest(TestCase):
         EmployeeProfile.objects.create(user=self.employee)
 
         self.client.login(userid="manager", password="testpass123")
-        self.today = timezone.now().date()
+        from core.utils import today_local; self.today = today_local()
 
     def test_status_report_view(self):
         """ทดสอบว่า status report view ทำงานได้"""
@@ -312,7 +313,7 @@ class PerformanceMetricsViewTest(TestCase):
         EmployeeProfile.objects.create(user=self.employee)
 
         self.client.login(userid="manager", password="testpass123")
-        self.today = timezone.now().date()
+        from core.utils import today_local; self.today = today_local()
 
     def test_performance_metrics_view(self):
         """ทดสอบว่า performance metrics view ทำงานได้"""
@@ -452,7 +453,7 @@ class CSVExportViewTest(TestCase):
         EmployeeProfile.objects.create(user=self.employee)
 
         self.client.login(userid="manager", password="testpass123")
-        self.today = timezone.now().date()
+        from core.utils import today_local; self.today = today_local()
 
     def test_csv_export_view(self):
         """ทดสอบว่า CSV export ทำงานได้"""
@@ -571,6 +572,6 @@ class ReportTimezoneTest(TestCase):
 
     def test_today_date_uses_bangkok_time(self):
         """ทดสอบว่า today date ใช้ Bangkok time"""
-        today = timezone.now().date()
+        today = today_local()
         response = self.client.get(reverse("reports:daily"))
         self.assertEqual(response.context["target_date"], today)

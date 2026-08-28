@@ -21,6 +21,31 @@ class TaskCreateForm(forms.ModelForm):
         label="มอบหมายให้",
     )
 
+    prepare_time = forms.TimeField(
+        required=False,
+        widget=forms.TimeInput(attrs={
+            "class": "form-input",
+            "type": "time",
+        }),
+        label="เวลาเตรียมงาน",
+    )
+    start_time = forms.TimeField(
+        required=False,
+        widget=forms.TimeInput(attrs={
+            "class": "form-input",
+            "type": "time",
+        }),
+        label="เวลาเริ่มงาน",
+    )
+    deadline_time = forms.TimeField(
+        required=False,
+        widget=forms.TimeInput(attrs={
+            "class": "form-input",
+            "type": "time",
+        }),
+        label="กำหนดส่งงาน",
+    )
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # ดึง active employees
@@ -74,9 +99,6 @@ class TaskCreateForm(forms.ModelForm):
             "category",
             "priority",
             "task_date",
-            "deadline",
-            "start_at",
-            "prepare_at",
             "estimated_minutes",
             "location",
             "notes",
@@ -105,27 +127,6 @@ class TaskCreateForm(forms.ModelForm):
                 },
                 format="%Y-%m-%d",
             ),
-            "deadline": forms.DateTimeInput(
-                attrs={
-                    "class": "form-input",
-                    "type": "datetime-local",
-                },
-                format="%Y-%m-%dT%H:%M",
-            ),
-            "start_at": forms.DateTimeInput(
-                attrs={
-                    "class": "form-input",
-                    "type": "datetime-local",
-                },
-                format="%Y-%m-%dT%H:%M",
-            ),
-            "prepare_at": forms.DateTimeInput(
-                attrs={
-                    "class": "form-input",
-                    "type": "datetime-local",
-                },
-                format="%Y-%m-%dT%H:%M",
-            ),
             "estimated_minutes": forms.NumberInput(
                 attrs={
                     "class": "form-input",
@@ -147,6 +148,48 @@ class TaskCreateForm(forms.ModelForm):
                 }
             ),
         }
+
+    def clean(self):
+        """ตรวจสอบความถูกต้องของข้อมูลเวลา + รวม date + time เป็น datetime"""
+        from pytz import timezone as tz
+        cleaned = super().clean()
+        task_date = cleaned.get("task_date")
+        prepare_time = cleaned.get("prepare_time")
+        start_time = cleaned.get("start_time")
+        deadline_time = cleaned.get("deadline_time")
+        bangkok = tz("Asia/Bangkok")
+
+        # รวม task_date + time → timezone-aware datetime
+        if task_date and prepare_time:
+            naive = timezone.datetime.combine(task_date, prepare_time)
+            cleaned["prepare_at"] = timezone.make_aware(naive, bangkok)
+        else:
+            cleaned["prepare_at"] = None
+
+        if task_date and start_time:
+            naive = timezone.datetime.combine(task_date, start_time)
+            cleaned["start_at"] = timezone.make_aware(naive, bangkok)
+        else:
+            cleaned["start_at"] = None
+
+        if task_date and deadline_time:
+            naive = timezone.datetime.combine(task_date, deadline_time)
+            cleaned["deadline"] = timezone.make_aware(naive, bangkok)
+        else:
+            cleaned["deadline"] = None
+
+        # ตรวจสอบ prepare_at <= start_at <= deadline
+        prepare_at = cleaned.get("prepare_at")
+        start_at = cleaned.get("start_at")
+        deadline = cleaned.get("deadline")
+
+        if prepare_at and start_at and prepare_at > start_at:
+            self.add_error("prepare_time", "เวลาเตรียมต้องก่อนหรือเท่ากับเวลาเริ่มงาน")
+
+        if start_at and deadline and start_at > deadline:
+            self.add_error("start_time", "เวลาเริ่มต้องก่อนหรือเท่ากับกำหนดส่ง")
+
+        return cleaned
 
 
 class TaskUpdateForm(forms.ModelForm):

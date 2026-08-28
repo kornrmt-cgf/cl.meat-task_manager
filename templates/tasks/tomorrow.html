@@ -24,7 +24,7 @@
     <!-- Task Grid -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {% for task in tasks %}
-        <div class="card hover-glow cursor-pointer tilt-card border-l-4 border-{{ task.status|default:'scheduled' }}-500"
+        <div class="card hover-glow cursor-pointer border-l-4 border-{{ task.status|default:'scheduled' }}-500"
              onclick="window.location='{% url 'tasks:detail' task.pk %}'">
             <div class="flex items-start justify-between gap-2">
                 <div class="flex-1 min-w-0">

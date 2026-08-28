@@ -17,6 +17,7 @@ from django.test import TestCase, Client
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 from django.utils import timezone
+from core.utils import today_local
 
 from accounts.models import EmployeeProfile, Team
 from tasks.models import Task, TaskAssignment, TaskActivity, TaskDependency
@@ -454,7 +455,7 @@ class TaskRescheduledNotificationTest(TestCase):
         task = Task.objects.create(
             title="งานทดสอบ",
             status=Task.Status.POSTPONED,
-            task_date=timezone.now().date() + timedelta(days=1),
+            task_date=today_local() + timedelta(days=1),
             created_by=self.manager,
         )
         TaskAssignment.objects.create(
@@ -719,7 +720,7 @@ class AutomationCommandTest(TestCase):
 
         # รันครั้งที่ 1
         call_command("process_task_automation", stdout=StringIO())
-        today = timezone.now().date()
+        today = today_local()
         count_1 = Task.objects.filter(recurrence_id=f"{template.pk}_{today.isoformat()}").count()
 
         # รันครั้งที่ 2

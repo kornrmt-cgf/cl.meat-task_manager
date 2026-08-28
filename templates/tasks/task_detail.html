@@ -83,7 +83,7 @@
 
             <!-- Description -->
             {% if task.description %}
-            <div class="card tilt-card">
+            <div class="card">
                 <h2 class="text-lg font-semibold text-dark-text mb-3">📝 รายละเอียด</h2>
                 <p class="text-dark-text whitespace-pre-wrap">{{ task.description }}</p>
             </div>
@@ -204,7 +204,7 @@
         <!-- Sidebar -->
         <div class="space-y-6">
             <!-- Time Info -->
-            <div class="card tilt-card">
+            <div class="card">
                 <h2 class="text-lg font-semibold text-dark-text mb-4">⏰ เวลา</h2>
                 <div class="space-y-3">
                     {% if task.prepare_at %}

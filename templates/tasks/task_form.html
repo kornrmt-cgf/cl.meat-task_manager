@@ -127,17 +127,17 @@
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
                         <label class="block text-sm font-semibold text-dark-text mb-2">🔧 เตรียมงาน</label>
-                        {{ form.prepare_at }}
+                        {{ form.prepare_time }}
                         <p class="text-xs text-dark-muted mt-1">เวลาที่ควรเริ่มเตรียม</p>
                     </div>
                     <div>
                         <label class="block text-sm font-semibold text-dark-text mb-2">▶️ เริ่มงาน</label>
-                        {{ form.start_at }}
+                        {{ form.start_time }}
                         <p class="text-xs text-dark-muted mt-1">เวลาเริ่มทำงานจริง</p>
                     </div>
                     <div>
                         <label class="block text-sm font-semibold text-dark-text mb-2">⏰ กำหนดส่ง</label>
-                        {{ form.deadline }}
+                        {{ form.deadline_time }}
                         <p class="text-xs text-dark-muted mt-1">กำหนดส่งงาน</p>
                     </div>
                 </div>
@@ -227,16 +227,14 @@
     }
 
     // === Time Auto-Calculation ===
-    // Handles both datetime-local (YYYY-MM-DDTHH:MM) and time (HH:MM) inputs
-
+    // Get time value from time input (HH:MM)
     function getDateTimeValue(name) {
         const el = document.querySelector('input[name="' + name + '"]');
         if (!el) return null;
         const val = el.value;
         if (!val) return null;
 
-        // datetime-local: "2026-08-28T09:30" or "2026-08-28 09:30"
-        const match = val.match(/T(\d{2}):(\d{2})/) || val.match(/(\d{2}):(\d{2})$/);
+        const match = val.match(/(\d{2}):(\d{2})/);
         if (match) {
             return { hours: parseInt(match[1]), minutes: parseInt(match[2]), total: parseInt(match[1]) * 60 + parseInt(match[2]) };
         }
@@ -246,17 +244,7 @@
     function setDateTimeValue(name, hours, minutes) {
         const el = document.querySelector('input[name="' + name + '"]');
         if (!el) return;
-        const val = el.value;
-
-        if (val.includes('T') || val.includes(' ')) {
-            // datetime-local: keep the date part, update time
-            const datePart = val.split(/T|\s/)[0];
-            el.value = datePart + 'T' + String(hours).padStart(2, '0') + ':' + String(minutes).padStart(2, '0');
-        } else {
-            // time input
-            el.value = String(hours).padStart(2, '0') + ':' + String(minutes).padStart(2, '0');
-        }
-        // Trigger change event
+        el.value = String(hours).padStart(2, '0') + ':' + String(minutes).padStart(2, '0');
         el.dispatchEvent(new Event('change', { bubbles: true }));
     }
 
@@ -272,22 +260,22 @@
     }
 
     function onTimeFieldChanged(fieldName) {
-        const startMin = getTotalMinutes('start_at');
-        const deadlineMin = getTotalMinutes('deadline');
+        const startMin = getTotalMinutes('start_time');
+        const deadlineMin = getTotalMinutes('deadline_time');
         const estEl = document.querySelector('input[name="estimated_minutes"]');
         const estVal = parseInt(estEl.value) || 0;
 
-        if (fieldName === 'start_at' || fieldName === 'estimated_minutes') {
+        if (fieldName === 'start_time' || fieldName === 'estimated_minutes') {
             // deadline = start_at + estimated_minutes
             if (startMin !== null && estVal > 0) {
                 const newDeadline = startMin + estVal;
                 if (newDeadline <= 24 * 60) {
                     const h = Math.floor(newDeadline / 60);
                     const m = newDeadline % 60;
-                    setDateTimeValue('deadline', h, m);
+                    setDateTimeValue('deadline_time', h, m);
                 }
             }
-        } else if (fieldName === 'deadline') {
+        } else if (fieldName === 'deadline_time') {
             // estimated_minutes = deadline - start_at
             if (startMin !== null && deadlineMin !== null && deadlineMin > startMin) {
                 estEl.value = deadlineMin - startMin;
@@ -325,9 +313,9 @@
         summary.classList.remove('hidden');
         document.getElementById('summary-date').textContent = '📅 ' + formatDateThai(date);
 
-        const prepareVal = getDateTimeValue('prepare_at');
-        const startVal = getDateTimeValue('start_at');
-        const deadlineVal = getDateTimeValue('deadline');
+        const prepareVal = getDateTimeValue('prepare_time');
+        const startVal = getDateTimeValue('start_time');
+        const deadlineVal = getDateTimeValue('deadline_time');
 
         const labels = { prepare: '🔧 เตรียมงาน', start: '▶️ เริ่มงาน', deadline: '⏰ กำหนดส่ง' };
         ['prepare', 'start', 'deadline'].forEach(t => {
@@ -360,15 +348,15 @@
     }
 
     document.addEventListener('DOMContentLoaded', () => {
-        const startEl = document.querySelector('input[name="start_at"]');
-        const deadlineEl = document.querySelector('input[name="deadline"]');
+        const startEl = document.querySelector('input[name="start_time"]');
+        const deadlineEl = document.querySelector('input[name="deadline_time"]');
         const estEl = document.querySelector('input[name="estimated_minutes"]');
 
-        if (startEl) startEl.addEventListener('change', () => onTimeFieldChanged('start_at'));
-        if (deadlineEl) deadlineEl.addEventListener('change', () => onTimeFieldChanged('deadline'));
+        if (startEl) startEl.addEventListener('change', () => onTimeFieldChanged('start_time'));
+        if (deadlineEl) deadlineEl.addEventListener('change', () => onTimeFieldChanged('deadline_time'));
         if (estEl) estEl.addEventListener('input', () => onTimeFieldChanged('estimated_minutes'));
 
-        ['task_date', 'prepare_at'].forEach(name => {
+        ['task_date', 'prepare_time'].forEach(name => {
             const el = document.querySelector('input[name="' + name + '"]');
             if (el) el.addEventListener('change', updateScheduleSummary);
         });

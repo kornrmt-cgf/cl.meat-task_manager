@@ -19,6 +19,7 @@ from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
+from core.utils import today_local
 
 from tasks.models import Task, TaskActivity, TaskAssignment, TaskTemplate
 from tasks.services import TaskService
@@ -89,7 +90,7 @@ class QueueOrderingTest(TestCase):
             userid="staff",
             email="staff@example.com", password="staffpass123"
         )
-        self.today = timezone.now().date()
+        self.today = today_local()
 
     def _create_task(self, title, start_at=None, queue_position=0):
         """สร้าง task พร้อม assignment"""
@@ -173,7 +174,7 @@ class RescheduleTest(TestCase):
         )
         self.task = Task.objects.create(
             title="ทดสอบ reschedule",
-            task_date=timezone.now().date(),
+            task_date=today_local(),
             start_at=timezone.now().replace(hour=9, minute=0),
             deadline=timezone.now().replace(hour=10, minute=0),
             status=Task.Status.SCHEDULED,
@@ -184,7 +185,7 @@ class RescheduleTest(TestCase):
         """ทดสอบ reschedule เปลี่ยนเวลา"""
         new_start = timezone.now().replace(hour=11, minute=0)
         new_deadline = timezone.now().replace(hour=12, minute=0)
-        new_date = timezone.now().date() + timedelta(days=1)
+        new_date = today_local() + timedelta(days=1)
 
         SchedulingService.reschedule_task(
             self.task, self.admin,
@@ -317,7 +318,7 @@ class PostponementTest(TestCase):
         )
         self.task = Task.objects.create(
             title="ทดสอบเลื่อน",
-            task_date=timezone.now().date(),
+            task_date=today_local(),
             start_at=timezone.now().replace(hour=9, minute=0),
             deadline=timezone.now().replace(hour=10, minute=0),
             status=Task.Status.IN_PROGRESS,
@@ -329,7 +330,7 @@ class PostponementTest(TestCase):
 
     def test_postpone_task(self):
         """ทดสอบเลื่อนงานไปวันใหม่"""
-        new_date = timezone.now().date() + timedelta(days=1)
+        new_date = today_local() + timedelta(days=1)
         new_start = timezone.now().replace(hour=11, minute=0) + timedelta(days=1)
         new_deadline = timezone.now().replace(hour=12, minute=0) + timedelta(days=1)
 
@@ -348,7 +349,7 @@ class PostponementTest(TestCase):
 
     def test_postpone_preserves_assignment(self):
         """ทดสอบว่าเลื่อนงานยังคง assignment"""
-        new_date = timezone.now().date() + timedelta(days=1)
+        new_date = today_local() + timedelta(days=1)
         SchedulingService.postpone_task_with_time(
             self.task, self.admin, new_task_date=new_date
         )
@@ -357,7 +358,7 @@ class PostponementTest(TestCase):
     def test_postpone_activity_logged(self):
         """ทดสอบว่าเลื่อนงานมี activity log"""
         initial_count = TaskActivity.objects.filter(task=self.task).count()
-        new_date = timezone.now().date() + timedelta(days=1)
+        new_date = today_local() + timedelta(days=1)
         SchedulingService.postpone_task_with_time(
             self.task, self.admin, new_task_date=new_date
         )
@@ -371,7 +372,7 @@ class PostponementTest(TestCase):
 
         with self.assertRaises(ValueError):
             SchedulingService.postpone_task_with_time(
-                self.task, self.admin, new_task_date=timezone.now().date()
+                self.task, self.admin, new_task_date=today_local()
             )
 
 
@@ -415,7 +416,7 @@ class TaskTemplateTest(TestCase):
             created_by=self.admin,
         )
 
-        today = timezone.now().date()
+        today = today_local()
         task = template.generate_task(today, self.admin)
 
         self.assertIsNotNone(task)
@@ -436,7 +437,7 @@ class TaskTemplateTest(TestCase):
             created_by=self.admin,
         )
 
-        today = timezone.now().date()
+        today = today_local()
         task1 = template.generate_task(today, self.admin)
         task2 = template.generate_task(today, self.admin)
 
@@ -454,7 +455,7 @@ class TaskTemplateTest(TestCase):
             created_by=self.admin,
         )
 
-        today = timezone.now().date()
+        today = today_local()
         task = template.generate_task(today, self.admin)
 
         # แก้ไข template
@@ -489,7 +490,7 @@ class RecurringTaskTest(TestCase):
             created_by=self.admin,
         )
 
-        today = timezone.now().date()
+        today = today_local()
         tasks = SchedulingService.generate_recurring_tasks(today, self.admin)
         self.assertEqual(len(tasks), 1)
         self.assertEqual(tasks[0].title, "งาน daily")
@@ -506,7 +507,7 @@ class RecurringTaskTest(TestCase):
         )
 
         # หาวันจันทร์ที่จะมาถึง
-        today = timezone.now().date()
+        today = today_local()
         days_until_monday = (7 - today.weekday()) % 7
         if days_until_monday == 0:
             days_until_monday = 7
@@ -527,7 +528,7 @@ class RecurringTaskTest(TestCase):
         )
 
         # หาวันเสาร์
-        today = timezone.now().date()
+        today = today_local()
         days_until_saturday = (5 - today.weekday()) % 7
         if days_until_saturday == 0:
             days_until_saturday = 7
@@ -547,7 +548,7 @@ class RecurringTaskTest(TestCase):
             created_by=self.admin,
         )
 
-        today = timezone.now().date()
+        today = today_local()
         tasks1 = SchedulingService.generate_recurring_tasks(today, self.admin)
         tasks2 = SchedulingService.generate_recurring_tasks(today, self.admin)
 
@@ -584,7 +585,7 @@ class CreateFromTemplateTest(TestCase):
 
     def test_create_from_template(self):
         """ทดสอบสร้าง task จาก template"""
-        today = timezone.now().date()
+        today = today_local()
         task = SchedulingService.create_task_from_template(
             self.template, today, self.admin, assign_to=[self.staff]
         )
@@ -598,7 +599,7 @@ class CreateFromTemplateTest(TestCase):
 
     def test_create_from_template_with_overrides(self):
         """ทดสอบสร้าง task จาก template พร้อม override"""
-        today = timezone.now().date()
+        today = today_local()
         task = SchedulingService.create_task_from_template(
             self.template, today, self.admin,
             title="ทำความสะอาดพิเศษ",
@@ -636,7 +637,7 @@ class EmployeeWeekViewTest(TestCase):
         self.client.login(userid="user", password="userpass123")
 
         # สร้างงานวันนี้
-        today = timezone.now().date()
+        today = today_local()
         task = Task.objects.create(
             title="งานวันนี้",
             task_date=today,
@@ -654,7 +655,7 @@ class EmployeeWeekViewTest(TestCase):
     def test_week_view_with_date(self):
         """ทดสอบ week view พร้อม date parameter"""
         self.client.login(userid="user", password="userpass123")
-        today = timezone.now().date()
+        today = today_local()
         response = self.client.get(f"{reverse('scheduling:week')}?date={today}")
         self.assertEqual(response.status_code, 200)
 
@@ -713,7 +714,7 @@ class ReorderHTMXTest(TestCase):
             userid="employee",
             email="employee@example.com", password="emppass123"
         )
-        self.today = timezone.now().date()
+        self.today = today_local()
         self.task = Task.objects.create(
             title="งานทดสอบ",
             task_date=self.today,
@@ -895,7 +896,7 @@ class SchedulingPermissionTest(TestCase):
         """ทดสอบว่า employee reschedule ไม่ได้"""
         task = Task.objects.create(
             title="งานทดสอบ",
-            task_date=timezone.now().date(),
+            task_date=today_local(),
             status=Task.Status.SCHEDULED,
             created_by=self.manager,
         )
@@ -914,7 +915,7 @@ class SchedulingPermissionTest(TestCase):
         """ทดสอบว่า manager reschedule ได้"""
         task = Task.objects.create(
             title="งานทดสอบ",
-            task_date=timezone.now().date(),
+            task_date=today_local(),
             status=Task.Status.SCHEDULED,
             created_by=self.manager,
         )
